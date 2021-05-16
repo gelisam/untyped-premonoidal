@@ -1,0 +1,17 @@
+name:                untyped-premonoidal
+version:             0.1.0.0
+synopsis:            An untyped, easier(?) version of free-premonoidal
+description:         Convert DAGs with specific properties to a canonical representation
+homepage:            https://github.com/gelisam/untyped-premonoidal
+github:              gelisam/acme-circular-containers
+license:             PublicDomain
+author:              Samuel Gélineau
+maintainer:          gelisam+github@gmail.com
+category:            Control
+
+dependencies:
+  - base >= 4.9 && < 5
+
+library:
+  source-dirs:      src
+  ghc-options: -W -Wall
