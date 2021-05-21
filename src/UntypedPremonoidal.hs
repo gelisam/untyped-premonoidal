@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds, FlexibleContexts, GADTs, GeneralizedNewtypeDeriving, KindSignatures, LambdaCase, PolyKinds, RankNTypes, ScopedTypeVariables, TypeApplications, TypeOperators #-}
+{-# LANGUAGE DataKinds, FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, KindSignatures, LambdaCase, PolyKinds, RankNTypes, ScopedTypeVariables, TypeApplications, TypeOperators #-}
 {-# OPTIONS -Wno-name-shadowing #-}
 module UntypedPremonoidal where
 
@@ -32,45 +32,102 @@ someIntVal
 data Const2 a m n = Const2
   { runConst2 :: a }
 
-data FreeCategory (q :: Nat -> Nat -> Type)
-                  (m :: Nat)
-                  (n :: Nat)
-                  where
+data Free (q :: Nat -> Nat -> Type)
+          (m :: Nat)
+          (n :: Nat)
+          where
   Id
     :: KnownNat n
-    => FreeCategory q n n
+    => Free q n n
   (:>>>)
     :: q m n
-    -> FreeCategory q n o
-    -> FreeCategory q m o
+    -> Free q n o
+    -> Free q m o
 infixr 4 :>>>
 
-data Step (q :: Nat -> Nat -> Type)
+data Either2 (q :: Nat -> Nat -> Type)
+             (r :: Nat -> Nat -> Type)
+             (m :: Nat)
+             (n :: Nat)
+             where
+  L2
+    :: q m n
+    -> Either2 q r m n
+  R2
+    :: r m n
+    -> Either2 q r m n
+
+data Widen (q :: Nat -> Nat -> Type)
+           (m :: Nat)
+           (n :: Nat)
+           where
+  Widen
+    :: (KnownNat pre, KnownNat post)
+    => Proxy pre
+    -> q m' n'
+    -> Proxy post
+    -> Widen q (pre + m' + post)
+               (pre + n' + post)
+
+data Atom (q :: Nat -> Nat -> Type)
           (m :: Nat)
           (n :: Nat)
           where
   Atom
     :: (KnownNat m, KnownNat n)
     => q m n
-    -> Step q m n
-  Widen
-    :: (KnownNat pre, KnownNat post)
-    => Proxy pre
-    -> Step q m n
-    -> Proxy post
-    -> Step q (pre + m + post)
-              (pre + n + post)
-  Swap
-    :: Step q 2 2
-  Intro
-    :: Step q 0 1
-  Drop
-    :: Step q 1 0
-  Dup
-    :: Step q 1 2
+    -> Atom q m n
 
-type StringDiagram q
-  = FreeCategory (Step q)
+data Intro (m :: Nat)
+           (n :: Nat)
+           where
+  Intro
+    :: Intro 0 1
+
+data Swap (m :: Nat)
+          (n :: Nat)
+          where
+  Swap
+    :: Swap 2 2
+
+data Drop (m :: Nat)
+          (n :: Nat)
+          where
+  Drop
+    :: Drop 1 0
+
+data Dup (m :: Nat)
+         (n :: Nat)
+         where
+  Dup
+    :: Dup 1 2
+
+type PremonoidalStep
+  = Intro
+
+type LinearStep
+  = Intro `Either2` Swap
+
+type AffineStep
+  = Intro `Either2` Swap `Either2` Drop
+
+type CartesianStep
+  = Intro `Either2` Swap `Either2` Drop `Either2` Dup
+
+type StringDiagram step q
+  = Free (Widen (step `Either2` Atom q))
+
+type Premonoidal q
+  = StringDiagram PremonoidalStep q
+
+type Linear q
+  = StringDiagram LinearStep q
+
+type Affine q
+  = StringDiagram AffineStep q
+
+type Cartesian q
+  = StringDiagram CartesianStep q
 
 data Some (q :: Nat -> Type) where
   Some
@@ -86,6 +143,38 @@ data Some2 (q :: Nat -> Nat -> Type) where
     -> Proxy n
     -> q m n
     -> Some2 q
+
+
+hoistFree
+  :: (forall x y. q x y -> r x y)
+  -> Free q m n
+  -> Free r m n
+hoistFree f = \case
+  Id
+    -> Id
+  q :>>> qs
+    -> f q :>>> hoistFree f qs
+
+hoistWiden
+  :: (forall x y. q x y -> r x y)
+  -> Widen q m n
+  -> Widen r m n
+hoistWiden f (Widen proxyPre q proxyPost)
+  = Widen proxyPre (f q) proxyPost
+
+hoistSome
+  :: (forall x. q x -> r x)
+  -> Some q
+  -> Some r
+hoistSome f (Some proxyM q)
+  = Some proxyM (f q)
+
+hoistSome2
+  :: (forall x y. q x y -> r x y)
+  -> Some2 q
+  -> Some2 r
+hoistSome2 f (Some2 proxyM proxyN q)
+  = Some2 proxyM proxyN(f q)
 
 
 axiom :: forall a b. Dict (a ~ b)
@@ -116,65 +205,56 @@ withKnownSum proxyM proxyN cc
       = withDict (axiom :: Dict (sum ~ (m + n)))
       $ cc proxySum
 
-withKnownFreeCategorySize
-  :: forall q m n r
-   . ( forall x y
-     . q x y
-    -> ( (KnownNat x, KnownNat y)
-      => Proxy x -> Proxy y -> r
+class KnownSize q where
+  withKnownSize
+    :: q m n
+    -> ( (KnownNat m, KnownNat n)
+      => Proxy m -> Proxy n -> r
        )
     -> r
-     )
-  -> FreeCategory q m n
-  -> ( (KnownNat m, KnownNat n)
-    => Proxy m -> Proxy n -> r
-     )
-  -> r
-withKnownFreeCategorySize withKnownQSize qs0Z cc
-  = case qs0Z of
-      Id
-        -> cc Proxy Proxy
-      q01 :>>> qs1Z
-        -> withKnownQSize q01 $ \proxyM _
-        -> withKnownFreeCategorySize withKnownQSize qs1Z $ \_ proxyN
-        -> cc proxyM proxyN
 
-withKnownStepSize
-  :: forall q m n r
-   . Step q m n
-  -> ( (KnownNat m, KnownNat n)
-    => Proxy m -> Proxy n -> r
-     )
-  -> r
-withKnownStepSize step cc
-  = case step of
-      Atom _
-        -> cc Proxy Proxy
-      Widen proxyPre subStep proxyPost
-        -> withKnownStepSize subStep $ \proxyM' proxyN'
-        -> withKnownSum proxyPre proxyM' $ \proxyPreM'
-        -> withKnownSum proxyPre proxyN' $ \proxyPreN'
-        -> withKnownSum proxyPreM' proxyPost $ \proxyM
-        -> withKnownSum proxyPreN' proxyPost $ \proxyN
-        -> cc proxyM proxyN
-      Swap
-        -> cc Proxy Proxy
-      Intro
-        -> cc Proxy Proxy
-      Drop
-        -> cc Proxy Proxy
-      Dup
-        -> cc Proxy Proxy
+instance KnownSize q => KnownSize (Free q) where
+  withKnownSize Id cc
+    = cc Proxy Proxy
+  withKnownSize (q01 :>>> qs1Z) cc
+    = withKnownSize q01 $ \proxyM _
+   -> withKnownSize qs1Z $ \_ proxyN
+   -> cc proxyM proxyN
 
-withKnownStringDiagramSize
-  :: forall q m n r
-   . StringDiagram q m n
-  -> ( (KnownNat m, KnownNat n)
-    => Proxy m -> Proxy n -> r
-     )
-  -> r
-withKnownStringDiagramSize
-  = withKnownFreeCategorySize withKnownStepSize
+instance (KnownSize q, KnownSize r) => KnownSize (Either2 q r) where
+  withKnownSize (L2 q) cc
+    = withKnownSize q cc
+  withKnownSize (R2 q) cc
+    = withKnownSize q cc
+
+instance KnownSize q => KnownSize (Widen q) where
+  withKnownSize (Widen proxyPre q proxyPost) cc
+    = withKnownSize q $ \proxyM' proxyN'
+   -> withKnownSum proxyPre proxyM' $ \proxyPreM'
+   -> withKnownSum proxyPre proxyN' $ \proxyPreN'
+   -> withKnownSum proxyPreM' proxyPost $ \proxyM
+   -> withKnownSum proxyPreN' proxyPost $ \proxyN
+   -> cc proxyM proxyN
+
+instance KnownSize (Atom q) where
+  withKnownSize (Atom _) cc
+    = cc Proxy Proxy
+
+instance KnownSize Intro where
+  withKnownSize Intro cc
+    = cc Proxy Proxy
+
+instance KnownSize Swap where
+  withKnownSize Swap cc
+    = cc Proxy Proxy
+
+instance KnownSize Drop where
+  withKnownSize Drop cc
+    = cc Proxy Proxy
+
+instance KnownSize Dup where
+  withKnownSize Dup cc
+    = cc Proxy Proxy
 
 
 newtype Random a = Random
@@ -232,40 +312,26 @@ pickConst2 = Random $ do
   put names
   pure $ Const2 name
 
-pickSomeConst2
-  :: Random (Some (Const2 String m))
-pickSomeConst2 = do
-  SomeNat proxyN <- pickSomeNat 3
-  c2 <- pickConst2
-  pure $ Some proxyN c2
-
-pickSome2Const2
-  :: Random (Some2 (Const2 String))
-pickSome2Const2 = do
-  SomeNat proxyM <- pickSomeNat 3
-  Some proxyN c2 <- pickSomeConst2
-  pure $ Some2 proxyM proxyN c2
-
-pickSomeFreeCategory
+pickSomeFree
   :: KnownNat m
   => Int
   -> ( forall x. KnownNat x
     => Random (Some (q x))
      )
-  -> Random (Some (FreeCategory q m))
-pickSomeFreeCategory 0 _ = do
+  -> Random (Some (Free q m))
+pickSomeFree 0 _ = do
   pure $ Some Proxy Id
-pickSomeFreeCategory size pickSomeQ = do
+pickSomeFree size pickSomeQ = do
   Some _proxyN q <- pickSomeQ
-  Some proxyO qs <- pickSomeFreeCategory (size - 1) pickSomeQ
+  Some proxyO qs <- pickSomeFree (size - 1) pickSomeQ
   pure $ Some proxyO (q :>>> qs)
 
-pickSomeWidening
+pickSomeWiden
   :: forall m q. KnownNat m
-  => Some2 (Step q)
-  -> Random (Some (Step q m))
-pickSomeWidening (Some2 proxyM' proxyN' step) = do
-  go proxyM' proxyN' step
+  => Some2 q
+  -> Random (Some (Widen q m))
+pickSomeWiden (Some2 proxyM' proxyN' q) = do
+  go proxyM' proxyN' q
   where
     proxyM :: Proxy m
     proxyM = Proxy
@@ -274,9 +340,9 @@ pickSomeWidening (Some2 proxyM' proxyN' step) = do
       :: forall m' n'. (KnownNat m', KnownNat n')
       => Proxy m'
       -> Proxy n'
-      -> Step q m' n'
-      -> Random (Some (Step q m))
-    go proxyM' proxyN' step = do
+      -> q m' n'
+      -> Random (Some (Widen q m))
+    go proxyM' proxyN' q = do
       let extraM = m - m'
       pre <- pickFrom [0..extraM]
       let post = extraM - pre
@@ -305,11 +371,11 @@ pickSomeWidening (Some2 proxyM' proxyN' step) = do
              )
           => Proxy pre
           -> Proxy post
-          -> Random (Some (Step q m))
+          -> Random (Some (Widen q m))
         go' proxyPre proxyPost = do
           case sameNat (Proxy @m) (Proxy @(pre + m' + post)) of
             Just Refl -> do
-              pure $ Some Proxy $ Widen proxyPre step proxyPost
+              pure $ Some Proxy $ Widen proxyPre q proxyPost
             Nothing -> do
               error $ "impossible: "
                    ++ show m
@@ -319,60 +385,74 @@ pickSomeWidening (Some2 proxyM' proxyN' step) = do
           where
             pre = intVal proxyPre
 
-pickSomeStep
-  :: forall m. KnownNat m
-  => Random (Some (Step (Const2 String) m))
-pickSomeStep = do
-  case sameNat (Proxy @m) (Proxy @0) of
-    Just Refl -> do
-      pickIO
-        [ pure $ Some (Proxy @1) Intro
-        , do Some proxyN c2 <- pickSomeConst2
-             pure $ Some proxyN $ Atom c2
-        ]
-    Nothing -> do
-      case sameNat (Proxy @m) (Proxy @1) of
-        Just Refl -> do
-          pickIO
-            [ pure $ Some (Proxy @0) Drop
-            , pure $ Some (Proxy @2) Dup
-            , do Some proxyN c2 <- pickSomeConst2
-                 pure $ Some proxyN $ Atom c2
-            ]
-        Nothing -> do
-          case sameNat (Proxy @m) (Proxy @2) of
-            Just Refl -> do
-              pickIO
-                [ pure $ Some (Proxy @2) Swap
-                , do Some proxyN c2 <- pickSomeConst2
-                     pure $ Some proxyN $ Atom c2
-                ]
-            Nothing -> do
-              some2Step <- pickSome2Step
-              pickSomeWidening some2Step
+class FanOut (q :: Nat -> Nat -> Type) where
+  fanOut
+    :: KnownNat m
+    => Proxy m
+    -> [Random (Some (Widen q m))]
 
-pickSome2Step
-  :: Random (Some2 (Step (Const2 String)))
-pickSome2Step = do
-  pickIO
-    [ do Some2 proxyM proxyN c2 <- pickSome2Const2
-         pure $ Some2 proxyM proxyN $ Atom c2
-    , pure $ Some2 (Proxy @2) (Proxy @2) Swap
-    , pure $ Some2 (Proxy @0) (Proxy @1) Intro
-    , pure $ Some2 (Proxy @1) (Proxy @0) Drop
-    , pure $ Some2 (Proxy @1) (Proxy @2) Dup
-    ]
+pickSomeFanOut
+  :: forall q m. (FanOut q, KnownNat m)
+  => Random (Some (Widen q m))
+pickSomeFanOut = do
+  pickIO (fanOut Proxy)
+
+instance (FanOut q, FanOut r) => FanOut (Either2 q r) where
+  fanOut proxyM
+    = fmap (fmap (hoistSome (hoistWiden L2))) (fanOut proxyM)
+   ++ fmap (fmap (hoistSome (hoistWiden R2))) (fanOut proxyM)
+
+instance FanOut (Atom (Const2 String)) where
+  fanOut proxyM
+    = [ do let m = intVal proxyM
+           m' <- pickFrom [0..(m `min` 3)]
+           n' <- pickFrom [0..3]
+           case (someIntVal m', someIntVal n') of
+             (Just (SomeNat proxyM'), Just (SomeNat proxyN')) -> do
+               c2 <- pickConst2
+               pickSomeWiden $ Some2 proxyM' proxyN' $ Atom c2
+             _ -> do
+               error $ "impossible: one of "
+                    ++ show m'
+                    ++ " or "
+                    ++ show n'
+                    ++ " is negative even though they were drawn from [0..3]??"
+      ]
+
+instance FanOut Intro where
+  fanOut _
+    = [ pickSomeWiden $ Some2 Proxy Proxy Intro
+      ]
+
+instance FanOut Swap where
+  fanOut proxyM
+    = [ pickSomeWiden $ Some2 Proxy Proxy Swap
+      | intVal proxyM >= 2
+      ]
+
+instance FanOut Drop where
+  fanOut proxyM
+    = [ pickSomeWiden $ Some2 Proxy Proxy Drop
+      | intVal proxyM >= 1
+      ]
+
+instance FanOut Dup where
+  fanOut proxyM
+    = [ pickSomeWiden $ Some2 Proxy Proxy Dup
+      | intVal proxyM >= 1
+      ]
 
 pickSomeStringDiagram
-  :: KnownNat m
+  :: forall step m. (FanOut step, KnownNat m)
   => Int
-  -> Random (Some (StringDiagram (Const2 String) m))
+  -> Random (Some (StringDiagram step (Const2 String) m))
 pickSomeStringDiagram size = do
-  pickSomeFreeCategory size pickSomeStep
+  pickSomeFree size pickSomeFanOut
 
 pickSome2StringDiagram
-  :: Int
-  -> Random (Some2 (StringDiagram (Const2 String)))
+  :: forall step. FanOut step
+  => Int
+  -> Random (Some2 (StringDiagram step (Const2 String)))
 pickSome2StringDiagram size = do
   SomeNat proxyM <- pickSomeNat 5
   Some proxyN qs <- pickSomeStringDiagram size
@@ -459,80 +539,119 @@ pprint1Label n label
     leftHalf = w `div` 2
     rightHalf = w - leftHalf
 
+class KnownSize q => PPrint q where
+  pprint
+    :: KnownNat m
+    => Proxy m
+    -> Proxy n
+    -> q m n
+    -> [String]
+
+pprintSome2
+  :: PPrint q
+  => Some2 q
+  -> [String]
+pprintSome2 (Some2 proxyM proxyN q)
+  = pprint proxyM proxyN q
+
+instance PPrint q => PPrint (Free q) where
+  pprint proxyM proxyO = \case
+    Id
+      -> [pprint1Pipes m]
+    step :>>> qs
+      -> withKnownSize step $ \_ proxyN
+      -> [pprint1Pipes m]
+      ++ pprint proxyM proxyN step
+      ++ pprint proxyN proxyO qs
+    where
+      m = intVal proxyM
+
+instance (PPrint q, PPrint r) => PPrint (Either2 q r) where
+  pprint proxyM proxyN = \case
+    L2 q
+      -> pprint proxyM proxyN q
+    R2 r
+      -> pprint proxyM proxyN r
+
+----   [ | | ]
+---- > [+---+]
+---- > [| f |]
+---- > [+---+]
+----   [ |   ]
+instance PPrint (Atom (Const2 String)) where
+  pprint proxyM proxyN (Atom (Const2 label))
+    = let m = intVal proxyM
+          n = intVal proxyN
+          w = 1 `max` m `max` n
+   in [pprint1Dashes w]
+   ++ [pprint1Label w label]
+   ++ [pprint1Dashes w]
+
+--   [ | | ]
+-- > [  \ \]
+-- > [+-+| | ]
+-- > [|f|| | ]
+-- > [+-+| | ]
+-- > [  / /  ]
+--   [ | | ]
+instance PPrint q => PPrint (Widen q) where
+  pprint _ _ (Widen proxyPre q proxyPost)
+    = let pre = intVal proxyPre
+          post = intVal proxyPost
+   in withKnownSize q $ \proxyM' proxyN'
+   -> let m' = intVal proxyM'
+          n' = intVal proxyN'
+          w' = 1 `max` m' `max` n'
+   in [ pprint1Pipes (pre + m')
+    .+. pprint1Spaces blanks
+    .+. pprint1Backslashes post
+      | let gap = w' - m'
+      , blanks <- [0..gap-1]
+      , post > 0
+      ]
+   ++ [ pprint1Pipes pre
+    .+. s
+    .+. pprint1Pipes post
+      | s <- pprint proxyM' proxyN' q
+      ]
+   ++ [ pprint1Pipes (pre + n')
+    .+. pprint1Spaces blanks
+    .+. pprint1Slashes post
+      | let gap = w' - n'
+      , blanks <- [gap,gap-1..1]
+      , post > 0
+      ]
+
+--   [   ]
+-- > [ . ]
+--   [ | ]
+instance PPrint Intro where
+  pprint _ _ Intro
+    = [" . "]
+
+--   [ | | ]
+-- > [  X  ]
+--   [ | | ]
+instance PPrint Swap where
+  pprint _ _ Swap
+    = ["  X  "]
+
+--   [ | ]
+-- > [ x ]
+--   [   ]
+instance PPrint Drop where
+  pprint _ _ Drop
+    = [" x "]
+
 --   [ | ]
 -- > [ |\  ]
 --   [ | | ]
-pprintStep
-  :: forall m n. KnownNat m
-  => Step (Const2 String) m n
-  -> [String]
-pprintStep = \case
-  Atom (Const2 label)
-    -> let n = intVal (Proxy @n)
-           w = 1 `max` m `max` n
-    in [pprint1Dashes w]
-    ++ [pprint1Label w label]
-    ++ [pprint1Dashes w]
-  Widen proxyPre step proxyPost
-    -> let pre = intVal proxyPre
-           post = intVal proxyPost
-    in withKnownStepSize step $ \proxyM' proxyN'
-    -> let m' = intVal proxyM'
-           n' = intVal proxyN'
-           w' = 1 `max` m' `max` n'
-    in [ pprint1Pipes (pre + m')
-     .+. pprint1Spaces blanks
-     .+. pprint1Backslashes post
-       | let gap = w' - m'
-       , blanks <- [0..gap-1]
-       , post > 0
-       ]
-    ++ [ pprint1Pipes pre
-     .+. s
-     .+. pprint1Pipes post
-       | s <- pprintStep step
-       ]
-    ++ [ pprint1Pipes (pre + n')
-     .+. pprint1Spaces blanks
-     .+. pprint1Slashes post
-       | let gap = w' - n'
-       , blanks <- [gap,gap-1..1]
-       , post > 0
-       ]
-  Swap
-    --  " | | "
-    -> ["  X  "]
-    --  " | | "
-  Intro
-    -> [" . "]
-    --  " | "
-  Drop
-    --  " | "
-    -> [" x "]
-  Dup
-    --  " | "
-    -> [" |\\  "]
-    --  " | | "
-  where
-    m = intVal (Proxy @m)
-
-pprintStringDiagram
-  :: forall m n. KnownNat m
-  => StringDiagram (Const2 String) m n
-  -> [String]
-pprintStringDiagram = \case
-  Id
-    -> [pprint1Pipes m]
-  step :>>> qs
-    -> withKnownStepSize step $ \_ _
-    -> [pprint1Pipes m]
-    ++ pprintStep step
-    ++ pprintStringDiagram qs
-  where
-    m = intVal (Proxy @m)
+instance PPrint Dup where
+  pprint _ _ Dup
+    = [" |\\  "]
 
 
 test :: IO ()
 test = do
-  Some2 _ _ qs <- runRandom $ pickSome2StringDiagram 6
-  mapM_ putStrLn $ pprintStringDiagram qs
+  some2qs <- runRandom $ pickSome2StringDiagram @CartesianStep 6
+  mapM_ putStrLn $ pprintSome2 some2qs
