@@ -11,6 +11,8 @@ category:            Control
 
 dependencies:
   - base >= 4.9 && < 5
+  - constraints
+  - random
 
 library:
   source-dirs:      src
