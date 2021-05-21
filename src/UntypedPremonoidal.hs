@@ -1,7 +1,10 @@
-{-# LANGUAGE DataKinds, FlexibleContexts, GADTs, KindSignatures, LambdaCase, PolyKinds, RankNTypes, ScopedTypeVariables, TypeApplications, TypeOperators #-}
+{-# LANGUAGE DataKinds, FlexibleContexts, GADTs, GeneralizedNewtypeDeriving, KindSignatures, LambdaCase, PolyKinds, RankNTypes, ScopedTypeVariables, TypeApplications, TypeOperators #-}
 {-# OPTIONS -Wno-name-shadowing #-}
 module UntypedPremonoidal where
 
+import Control.Monad (replicateM)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.State (StateT, evalStateT, get, put)
 import Data.Constraint (Dict(..), withDict)
 import Data.Kind (Type)
 import Data.List (intercalate)
@@ -174,23 +177,44 @@ withKnownStringDiagramSize
   = withKnownFreeCategorySize withKnownStepSize
 
 
+newtype Random a = Random
+  { unRandom :: StateT [String] IO a }
+  deriving (Functor, Applicative, Monad)
+
+runRandom
+  :: Random a
+  -> IO a
+runRandom
+  = flip evalStateT names
+  . unRandom
+  where
+    letters :: [Char]
+    letters
+      = ['f'..'z']
+     ++ ['a'..'e']
+
+    names :: [String]
+    names = do
+      n <- [1..]
+      replicateM n letters
+
 pickFrom
   :: [a]
-  -> IO a
-pickFrom xs = do
-  i <- randomRIO (0, length xs - 1)
+  -> Random a
+pickFrom xs = Random $ do
+  i <- lift $ randomRIO (0, length xs - 1)
   pure (xs !! i)
 
 pickIO
-  :: [IO a]
-  -> IO a
+  :: [Random a]
+  -> Random a
 pickIO ios = do
   io <- pickFrom ios
   io
 
 pickSomeNat
   :: Int
-  -> IO SomeNat
+  -> Random SomeNat
 pickSomeNat maxNat = do
   n <- pickFrom [0..maxNat]
   case someIntVal n of
@@ -202,20 +226,21 @@ pickSomeNat maxNat = do
            ++ " somehow contains a negative number??"
 
 pickConst2
-  :: IO (Const2 String m n)
-pickConst2 = do
-  label <- pickFrom ["f","g","h"]
-  pure $ Const2 label
+  :: Random (Const2 String m n)
+pickConst2 = Random $ do
+  name : names <- get
+  put names
+  pure $ Const2 name
 
 pickSomeConst2
-  :: IO (Some (Const2 String m))
+  :: Random (Some (Const2 String m))
 pickSomeConst2 = do
   SomeNat proxyN <- pickSomeNat 3
   c2 <- pickConst2
   pure $ Some proxyN c2
 
 pickSome2Const2
-  :: IO (Some2 (Const2 String))
+  :: Random (Some2 (Const2 String))
 pickSome2Const2 = do
   SomeNat proxyM <- pickSomeNat 3
   Some proxyN c2 <- pickSomeConst2
@@ -225,9 +250,9 @@ pickSomeFreeCategory
   :: KnownNat m
   => Int
   -> ( forall x. KnownNat x
-    => IO (Some (q x))
+    => Random (Some (q x))
      )
-  -> IO (Some (FreeCategory q m))
+  -> Random (Some (FreeCategory q m))
 pickSomeFreeCategory 0 _ = do
   pure $ Some Proxy Id
 pickSomeFreeCategory size pickSomeQ = do
@@ -238,7 +263,7 @@ pickSomeFreeCategory size pickSomeQ = do
 pickSomeWidening
   :: forall m q. KnownNat m
   => Some2 (Step q)
-  -> IO (Some (Step q m))
+  -> Random (Some (Step q m))
 pickSomeWidening (Some2 proxyM' proxyN' step) = do
   go proxyM' proxyN' step
   where
@@ -250,7 +275,7 @@ pickSomeWidening (Some2 proxyM' proxyN' step) = do
       => Proxy m'
       -> Proxy n'
       -> Step q m' n'
-      -> IO (Some (Step q m))
+      -> Random (Some (Step q m))
     go proxyM' proxyN' step = do
       let extraM = m - m'
       pre <- pickFrom [0..extraM]
@@ -280,7 +305,7 @@ pickSomeWidening (Some2 proxyM' proxyN' step) = do
              )
           => Proxy pre
           -> Proxy post
-          -> IO (Some (Step q m))
+          -> Random (Some (Step q m))
         go' proxyPre proxyPost = do
           case sameNat (Proxy @m) (Proxy @(pre + m' + post)) of
             Just Refl -> do
@@ -296,7 +321,7 @@ pickSomeWidening (Some2 proxyM' proxyN' step) = do
 
 pickSomeStep
   :: forall m. KnownNat m
-  => IO (Some (Step (Const2 String) m))
+  => Random (Some (Step (Const2 String) m))
 pickSomeStep = do
   case sameNat (Proxy @m) (Proxy @0) of
     Just Refl -> do
@@ -327,7 +352,7 @@ pickSomeStep = do
               pickSomeWidening some2Step
 
 pickSome2Step
-  :: IO (Some2 (Step (Const2 String)))
+  :: Random (Some2 (Step (Const2 String)))
 pickSome2Step = do
   pickIO
     [ do Some2 proxyM proxyN c2 <- pickSome2Const2
@@ -341,13 +366,13 @@ pickSome2Step = do
 pickSomeStringDiagram
   :: KnownNat m
   => Int
-  -> IO (Some (StringDiagram (Const2 String) m))
+  -> Random (Some (StringDiagram (Const2 String) m))
 pickSomeStringDiagram size = do
   pickSomeFreeCategory size pickSomeStep
 
 pickSome2StringDiagram
   :: Int
-  -> IO (Some2 (StringDiagram (Const2 String)))
+  -> Random (Some2 (StringDiagram (Const2 String)))
 pickSome2StringDiagram size = do
   SomeNat proxyM <- pickSomeNat 5
   Some proxyN qs <- pickSomeStringDiagram size
@@ -509,5 +534,5 @@ pprintStringDiagram = \case
 
 test :: IO ()
 test = do
-  Some2 _ _ qs <- pickSome2StringDiagram 6
+  Some2 _ _ qs <- runRandom $ pickSome2StringDiagram 6
   mapM_ putStrLn $ pprintStringDiagram qs

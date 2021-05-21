@@ -13,6 +13,7 @@ dependencies:
   - base >= 4.9 && < 5
   - constraints
   - random
+  - transformers
 
 library:
   source-dirs:      src
