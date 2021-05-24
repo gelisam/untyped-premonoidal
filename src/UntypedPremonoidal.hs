@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds, FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, KindSignatures, LambdaCase, PolyKinds, RankNTypes, ScopedTypeVariables, TypeApplications, TypeOperators #-}
+{-# LANGUAGE DataKinds, EmptyCase, FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, KindSignatures, LambdaCase, PolyKinds, RankNTypes, ScopedTypeVariables, TypeApplications, TypeOperators #-}
 {-# OPTIONS -Wno-name-shadowing #-}
 module UntypedPremonoidal where
 
@@ -45,6 +45,14 @@ data Free (q :: Nat -> Nat -> Type)
     -> Free q m o
 infixr 4 :>>>
 
+data Void2 (m :: Nat)
+           (n :: Nat)
+
+absurd2
+  :: Void2 m n
+  -> a
+absurd2 v2 = case v2 of {}
+
 data Either2 (q :: Nat -> Nat -> Type)
              (r :: Nat -> Nat -> Type)
              (m :: Nat)
@@ -78,12 +86,6 @@ data Atom (q :: Nat -> Nat -> Type)
     => q m n
     -> Atom q m n
 
-data Intro (m :: Nat)
-           (n :: Nat)
-           where
-  Intro
-    :: Intro 0 1
-
 data Swap (m :: Nat)
           (n :: Nat)
           where
@@ -103,16 +105,16 @@ data Dup (m :: Nat)
     :: Dup 1 2
 
 type PremonoidalStep
-  = Intro
+  = Void2
 
 type LinearStep
-  = Intro `Either2` Swap
+  = Swap
 
 type AffineStep
-  = Intro `Either2` Swap `Either2` Drop
+  = Swap `Either2` Drop
 
 type CartesianStep
-  = Intro `Either2` Swap `Either2` Drop `Either2` Dup
+  = Swap `Either2` Drop `Either2` Dup
 
 type StringDiagram step q
   = Free (Widen (step `Either2` Atom q))
@@ -221,6 +223,10 @@ instance KnownSize q => KnownSize (Free q) where
    -> withKnownSize qs1Z $ \_ proxyN
    -> cc proxyM proxyN
 
+instance KnownSize Void2 where
+  withKnownSize v2 _
+    = absurd2 v2
+
 instance (KnownSize q, KnownSize r) => KnownSize (Either2 q r) where
   withKnownSize (L2 q) cc
     = withKnownSize q cc
@@ -238,10 +244,6 @@ instance KnownSize q => KnownSize (Widen q) where
 
 instance KnownSize (Atom q) where
   withKnownSize (Atom _) cc
-    = cc Proxy Proxy
-
-instance KnownSize Intro where
-  withKnownSize Intro cc
     = cc Proxy Proxy
 
 instance KnownSize Swap where
@@ -397,6 +399,10 @@ pickSomeFanOut
 pickSomeFanOut = do
   pickIO (fanOut Proxy)
 
+instance FanOut Void2 where
+  fanOut _
+    = []
+
 instance (FanOut q, FanOut r) => FanOut (Either2 q r) where
   fanOut proxyM
     = fmap (fmap (hoistSome (hoistWiden L2))) (fanOut proxyM)
@@ -417,11 +423,6 @@ instance FanOut (Atom (Const2 String)) where
                     ++ " or "
                     ++ show n'
                     ++ " is negative even though they were drawn from [0..3]??"
-      ]
-
-instance FanOut Intro where
-  fanOut _
-    = [ pickSomeWiden $ Some2 Proxy Proxy Intro
       ]
 
 instance FanOut Swap where
@@ -621,13 +622,6 @@ instance PPrint q => PPrint (Widen q) where
       , blanks <- [gap,gap-1..1]
       , post > 0
       ]
-
---   [   ]
--- > [ . ]
---   [ | ]
-instance PPrint Intro where
-  pprint _ _ Intro
-    = [" . "]
 
 --   [ | | ]
 -- > [  X  ]
