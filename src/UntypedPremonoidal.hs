@@ -1,123 +1,48 @@
-{-# LANGUAGE DataKinds, EmptyCase, FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, KindSignatures, LambdaCase, PolyKinds, RankNTypes, ScopedTypeVariables, TypeApplications, TypeOperators #-}
-{-# OPTIONS -Wno-name-shadowing #-}
+{-# LANGUAGE DefaultSignatures, DeriveFunctor, FlexibleInstances, GeneralizedNewtypeDeriving, ScopedTypeVariables, TypeApplications, TypeOperators #-}
 module UntypedPremonoidal where
 
 import Control.Monad (replicateM)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State (StateT, evalStateT, get, put)
-import Data.Constraint (Dict(..), withDict)
-import Data.Kind (Type)
 import Data.List (intercalate)
-import Data.Proxy (Proxy(..))
-import Data.Type.Equality ((:~:)(Refl))
-import GHC.TypeLits
+import Data.Void (Void, absurd)
 import System.Random (randomRIO)
-import Unsafe.Coerce (unsafeCoerce)
 
 
-intVal
-  :: KnownNat n
-  => Proxy n
-  -> Int
-intVal
-  = fromIntegral . natVal
+data Widen a = Widen
+  { widenPre :: Int
+  , widenMid :: a
+  , widenPost :: Int
+  }
+  deriving Functor
 
-someIntVal
-  :: Int
-  -> Maybe SomeNat
-someIntVal
-  = someNatVal . fromIntegral
+data Atom a = Atom
+  { atomInput :: Int
+  , atomValue :: a
+  , atomOutput :: Int
+  }
+  deriving Functor
 
+data Swap = Swap
 
-data Const2 a m n = Const2
-  { runConst2 :: a }
+data Drop = Drop
 
-data Free (q :: Nat -> Nat -> Type)
-          (m :: Nat)
-          (n :: Nat)
-          where
-  Id
-    :: KnownNat n
-    => Free q n n
-  (:>>>)
-    :: q m n
-    -> Free q n o
-    -> Free q m o
-infixr 4 :>>>
-
-data Void2 (m :: Nat)
-           (n :: Nat)
-
-absurd2
-  :: Void2 m n
-  -> a
-absurd2 v2 = case v2 of {}
-
-data Either2 (q :: Nat -> Nat -> Type)
-             (r :: Nat -> Nat -> Type)
-             (m :: Nat)
-             (n :: Nat)
-             where
-  L2
-    :: q m n
-    -> Either2 q r m n
-  R2
-    :: r m n
-    -> Either2 q r m n
-
-data Widen (q :: Nat -> Nat -> Type)
-           (m :: Nat)
-           (n :: Nat)
-           where
-  Widen
-    :: (KnownNat pre, KnownNat post)
-    => Proxy pre
-    -> q m' n'
-    -> Proxy post
-    -> Widen q (pre + m' + post)
-               (pre + n' + post)
-
-data Atom (q :: Nat -> Nat -> Type)
-          (m :: Nat)
-          (n :: Nat)
-          where
-  Atom
-    :: (KnownNat m, KnownNat n)
-    => q m n
-    -> Atom q m n
-
-data Swap (m :: Nat)
-          (n :: Nat)
-          where
-  Swap
-    :: Swap 2 2
-
-data Drop (m :: Nat)
-          (n :: Nat)
-          where
-  Drop
-    :: Drop 1 0
-
-data Dup (m :: Nat)
-         (n :: Nat)
-         where
-  Dup
-    :: Dup 1 2
+data Dup = Dup
 
 type PremonoidalStep
-  = Void2
+  = Void
 
 type LinearStep
   = Swap
 
 type AffineStep
-  = Swap `Either2` Drop
+  = Swap `Either` Drop
 
 type CartesianStep
-  = Swap `Either2` Drop `Either2` Dup
+  = Swap `Either` Drop `Either` Dup
 
 type StringDiagram step q
-  = Free (Widen (step `Either2` Atom q))
+  = [Widen (step `Either` Atom q)]
 
 type Premonoidal q
   = StringDiagram PremonoidalStep q
@@ -131,132 +56,90 @@ type Affine q
 type Cartesian q
   = StringDiagram CartesianStep q
 
-data Some (q :: Nat -> Type) where
-  Some
-    :: KnownNat n
-    => Proxy n
-    -> q n
-    -> Some q
 
-data Some2 (q :: Nat -> Nat -> Type) where
-  Some2
-    :: (KnownNat m, KnownNat n)
-    => Proxy m
-    -> Proxy n
-    -> q m n
-    -> Some2 q
-
-
-hoistFree
-  :: (forall x y. q x y -> r x y)
-  -> Free q m n
-  -> Free r m n
-hoistFree f = \case
-  Id
-    -> Id
-  q :>>> qs
-    -> f q :>>> hoistFree f qs
-
-hoistWiden
-  :: (forall x y. q x y -> r x y)
-  -> Widen q m n
-  -> Widen r m n
-hoistWiden f (Widen proxyPre q proxyPost)
-  = Widen proxyPre (f q) proxyPost
-
-hoistSome
-  :: (forall x. q x -> r x)
-  -> Some q
-  -> Some r
-hoistSome f (Some proxyM q)
-  = Some proxyM (f q)
-
-hoistSome2
-  :: (forall x y. q x y -> r x y)
-  -> Some2 q
-  -> Some2 r
-hoistSome2 f (Some2 proxyM proxyN q)
-  = Some2 proxyM proxyN(f q)
-
-
-axiom :: forall a b. Dict (a ~ b)
-axiom = unsafeCoerce (Dict :: Dict (a ~ a))
-
-withKnownSum
-  :: forall m n r. (KnownNat m, KnownNat n)
-  => Proxy m
-  -> Proxy n
-  -> (KnownNat (m + n) => Proxy (m + n) -> r)
-  -> r
-withKnownSum proxyM proxyN cc
-  = case someIntVal (intVal proxyM + intVal proxyN) of
-      Just (SomeNat proxySum)
-        -> go proxySum
-      Nothing
-        -> error $ "impossible: the sum of two Nats"
-                ++ show (intVal proxyM)
-                ++ " + "
-                ++ show (intVal proxyN)
-                ++ " is somehow negative??"
-  where
-    go
-      :: forall sum. KnownNat sum
-      => Proxy sum
-      -> r
-    go proxySum
-      = withDict (axiom :: Dict (sum ~ (m + n)))
-      $ cc proxySum
-
-class KnownSize q where
-  withKnownSize
-    :: q m n
-    -> ( (KnownNat m, KnownNat n)
-      => Proxy m -> Proxy n -> r
+class KnownSize a where
+  knownSize
+    :: a
+    -> ( Int  -- input size
+       , Int  -- output size
        )
-    -> r
 
-instance KnownSize q => KnownSize (Free q) where
-  withKnownSize Id cc
-    = cc Proxy Proxy
-  withKnownSize (q01 :>>> qs1Z) cc
-    = withKnownSize q01 $ \proxyM _
-   -> withKnownSize qs1Z $ \_ proxyN
-   -> cc proxyM proxyN
+instance KnownSize Void where
+  knownSize
+    = absurd
 
-instance KnownSize Void2 where
-  withKnownSize v2 _
-    = absurd2 v2
+instance (KnownSize a, KnownSize b) => KnownSize (Either a b) where
+  knownSize (Left a)
+    = knownSize a
+  knownSize (Right b)
+    = knownSize b
 
-instance (KnownSize q, KnownSize r) => KnownSize (Either2 q r) where
-  withKnownSize (L2 q) cc
-    = withKnownSize q cc
-  withKnownSize (R2 q) cc
-    = withKnownSize q cc
+instance KnownSize a => KnownSize (Widen a) where
+  knownSize (Widen pre a post)
+    = let (m', n') = knownSize a
+   in ( pre + m' + post
+      , pre + n' + post
+      )
 
-instance KnownSize q => KnownSize (Widen q) where
-  withKnownSize (Widen proxyPre q proxyPost) cc
-    = withKnownSize q $ \proxyM' proxyN'
-   -> withKnownSum proxyPre proxyM' $ \proxyPreM'
-   -> withKnownSum proxyPre proxyN' $ \proxyPreN'
-   -> withKnownSum proxyPreM' proxyPost $ \proxyM
-   -> withKnownSum proxyPreN' proxyPost $ \proxyN
-   -> cc proxyM proxyN
-
-instance KnownSize (Atom q) where
-  withKnownSize (Atom _) cc
-    = cc Proxy Proxy
+instance KnownSize (Atom a) where
+  knownSize (Atom m _ n)
+    = (m, n)
 
 instance KnownSize Swap where
-  withKnownSize Swap cc
-    = cc Proxy Proxy
+  knownSize Swap
+    = (2, 2)
 
 instance KnownSize Drop where
-  withKnownSize Drop cc
-    = cc Proxy Proxy
+  knownSize Drop
+    = (1, 0)
 
 instance KnownSize Dup where
-  withKnownSize Dup cc
-    = cc Proxy Proxy
+  knownSize Dup
+    = (1, 2)
+
+
+-- Sometimes we can't measure the input size, but we can compute the output
+-- size from the input size. Throughout this file, functions which need to be
+-- given the input size are suffixed with "Given".
+class KnownSizeGiven a where
+  knownSizeGiven
+    :: a
+    -> Int  -- input size
+    -> Int  -- output size
+  default knownSizeGiven
+    :: KnownSize a
+    => a
+    -> (Int -> Int)
+  knownSizeGiven a m
+    = let (expectedM, n) = knownSize a
+   in if m == expectedM
+      then n
+      else error $ "knownSizeGiven: input is known to be "
+                ++ show expectedM
+                ++ ", but the given size was "
+                ++ show m
+
+instance KnownSizeGiven Void
+instance KnownSizeGiven (Atom a)
+instance KnownSizeGiven Swap
+instance KnownSizeGiven Drop
+instance KnownSizeGiven Dup
+
+instance KnownSizeGiven a => KnownSizeGiven [a] where
+  knownSizeGiven []
+    = id
+  knownSizeGiven (a:as)
+    = knownSizeGiven as . knownSizeGiven a
+
+instance (KnownSizeGiven a, KnownSizeGiven b) => KnownSizeGiven (Either a b) where
+  knownSizeGiven (Left a)
+    = knownSizeGiven a
+  knownSizeGiven (Right b)
+    = knownSizeGiven b
+
+instance KnownSizeGiven a => KnownSizeGiven (Widen a) where
+  knownSizeGiven (Widen pre a post) m
+    = knownSizeGiven a (m - pre - post) + pre + post
 
 
 newtype Random a = Random
@@ -294,170 +177,88 @@ pickIO ios = do
   io <- pickFrom ios
   io
 
-pickSomeNat
-  :: Int
-  -> Random SomeNat
-pickSomeNat maxNat = do
-  n <- pickFrom [0..maxNat]
-  case someIntVal n of
-    Just someNat -> do
-      pure someNat
-    Nothing -> do
-      error $ "impossible: 0.."
-           ++ show maxNat
-           ++ " somehow contains a negative number??"
-
-pickConst2
-  :: Random (Const2 String m n)
-pickConst2 = Random $ do
+pickName
+  :: Random String
+pickName = Random $ do
   name : names <- get
   put names
-  pure $ Const2 name
+  pure name
 
-pickSomeFree
-  :: KnownNat m
-  => Int
-  -> ( forall x. KnownNat x
-    => Random (Some (q x))
-     )
-  -> Random (Some (Free q m))
-pickSomeFree 0 _ = do
-  pure $ Some Proxy Id
-pickSomeFree size pickSomeQ = do
-  Some _proxyN q <- pickSomeQ
-  Some proxyO qs <- pickSomeFree (size - 1) pickSomeQ
-  pure $ Some proxyO (q :>>> qs)
+pickListGiven
+  :: KnownSizeGiven a
+  => Int  -- desired length
+  -> (Int -> Random a)
+  -> (Int -> Random [a])
+pickListGiven 0 _ _ = do
+  pure []
+pickListGiven desiredLength pickA m = do
+  a <- pickA m
+  as <- pickListGiven (desiredLength - 1) pickA (knownSizeGiven a m)
+  pure (a:as)
 
-pickSomeWiden
-  :: forall m q. KnownNat m
-  => Some2 q
-  -> Random (Some (Widen q m))
-pickSomeWiden (Some2 proxyM' proxyN' q) = do
-  go proxyM' proxyN' q
-  where
-    proxyM :: Proxy m
-    proxyM = Proxy
+pickWidenGiven
+  :: KnownSize a
+  => a
+  -> (Int -> Random (Widen a))
+pickWidenGiven a m = do
+  let (m', _n') = knownSize a
+  let extraM = m - m'
+  pre <- pickFrom [0..extraM]
+  let post = extraM - pre
+  pure $ Widen pre a post
 
-    go
-      :: forall m' n'. (KnownNat m', KnownNat n')
-      => Proxy m'
-      -> Proxy n'
-      -> q m' n'
-      -> Random (Some (Widen q m))
-    go proxyM' proxyN' q = do
-      let extraM = m - m'
-      pre <- pickFrom [0..extraM]
-      let post = extraM - pre
-      case (someIntVal pre, someIntVal post) of
-        (Just (SomeNat proxyPre), Just (SomeNat proxyPost)) -> do
-          withKnownSum proxyPre proxyM' $ \proxyPreM' -> do
-            withKnownSum proxyPre proxyN' $ \proxyPreN' -> do
-              withKnownSum proxyPreM' proxyPost $ \_ -> do
-                withKnownSum proxyPreN' proxyPost $ \_ -> do
-                  go' proxyPre proxyPost
-        _ -> do
-          error $ "pickSomeWidening: "
-               ++ show m'
-               ++ " > "
-               ++ show m
-      where
-        m = intVal proxyM
-        m' = intVal proxyM'
+class PickGiven a where
+  pickingsGiven
+    :: Int -> [Random (Widen a)]
 
-        go'
-          :: forall pre post
-           . ( KnownNat pre
-             , KnownNat post
-             , KnownNat (pre + m' + post)
-             , KnownNat (pre + n' + post)
-             )
-          => Proxy pre
-          -> Proxy post
-          -> Random (Some (Widen q m))
-        go' proxyPre proxyPost = do
-          case sameNat (Proxy @m) (Proxy @(pre + m' + post)) of
-            Just Refl -> do
-              pure $ Some Proxy $ Widen proxyPre q proxyPost
-            Nothing -> do
-              error $ "impossible: "
-                   ++ show m
-                   ++ " is somehow not equal to "
-                   ++ show (pre + m' + ((m - m') - pre))
-                   ++ "??"
-          where
-            pre = intVal proxyPre
+pickGiven
+  :: PickGiven a
+  => Int -> Random (Widen a)
+pickGiven m = do
+  pickIO (pickingsGiven m)
 
-class FanOut (q :: Nat -> Nat -> Type) where
-  fanOut
-    :: KnownNat m
-    => Proxy m
-    -> [Random (Some (Widen q m))]
-
-pickSomeFanOut
-  :: forall q m. (FanOut q, KnownNat m)
-  => Random (Some (Widen q m))
-pickSomeFanOut = do
-  pickIO (fanOut Proxy)
-
-instance FanOut Void2 where
-  fanOut _
+instance PickGiven Void where
+  pickingsGiven _
     = []
 
-instance (FanOut q, FanOut r) => FanOut (Either2 q r) where
-  fanOut proxyM
-    = fmap (fmap (hoistSome (hoistWiden L2))) (fanOut proxyM)
-   ++ fmap (fmap (hoistSome (hoistWiden R2))) (fanOut proxyM)
+instance (PickGiven a, PickGiven b) => PickGiven (Either a b) where
+  pickingsGiven m
+    = (fmap . fmap . fmap) Left (pickingsGiven m)
+   ++ (fmap . fmap . fmap) Right (pickingsGiven m)
 
-instance FanOut (Atom (Const2 String)) where
-  fanOut proxyM
-    = [ do let m = intVal proxyM
-           m' <- pickFrom [0..(m `min` 3)]
+instance PickGiven (Atom String) where
+  pickingsGiven m
+    = [ do m' <- pickFrom [0..(m `min` 3)]
            n' <- pickFrom [0..3]
-           case (someIntVal m', someIntVal n') of
-             (Just (SomeNat proxyM'), Just (SomeNat proxyN')) -> do
-               c2 <- pickConst2
-               pickSomeWiden $ Some2 proxyM' proxyN' $ Atom c2
-             _ -> do
-               error $ "impossible: one of "
-                    ++ show m'
-                    ++ " or "
-                    ++ show n'
-                    ++ " is negative even though they were drawn from [0..3]??"
+           s <- pickName
+           pickWidenGiven (Atom m' s n') m
       ]
 
-instance FanOut Swap where
-  fanOut proxyM
-    = [ pickSomeWiden $ Some2 Proxy Proxy Swap
-      | intVal proxyM >= 2
+instance PickGiven Swap where
+  pickingsGiven m
+    = [ pickWidenGiven Swap m
+      | m >= 2
       ]
 
-instance FanOut Drop where
-  fanOut proxyM
-    = [ pickSomeWiden $ Some2 Proxy Proxy Drop
-      | intVal proxyM >= 1
+instance PickGiven Drop where
+  pickingsGiven m
+    = [ pickWidenGiven Drop m
+      | m >= 1
       ]
 
-instance FanOut Dup where
-  fanOut proxyM
-    = [ pickSomeWiden $ Some2 Proxy Proxy Dup
-      | intVal proxyM >= 1
+instance PickGiven Dup where
+  pickingsGiven m
+    = [ pickWidenGiven Dup m
+      | m >= 1
       ]
 
-pickSomeStringDiagram
-  :: forall step m. (FanOut step, KnownNat m)
-  => Int
-  -> Random (Some (StringDiagram step (Const2 String) m))
-pickSomeStringDiagram size = do
-  pickSomeFree size pickSomeFanOut
-
-pickSome2StringDiagram
-  :: forall step. FanOut step
-  => Int
-  -> Random (Some2 (StringDiagram step (Const2 String)))
-pickSome2StringDiagram size = do
-  SomeNat proxyM <- pickSomeNat 5
-  Some proxyN qs <- pickSomeStringDiagram size
-  pure $ Some2 proxyM proxyN qs
+pickStringDiagramGiven
+  :: forall step
+   . (PickGiven step, KnownSizeGiven step)
+  => Int  -- desired length
+  -> (Int -> Random (StringDiagram step String))
+pickStringDiagramGiven desiredLength
+  = pickListGiven desiredLength pickGiven
 
 
 -- convention: when drawing something N pipes wide, every line should have
@@ -540,54 +341,6 @@ pprint1Label n label
     leftHalf = w `div` 2
     rightHalf = w - leftHalf
 
-class KnownSize q => PPrint q where
-  pprint
-    :: KnownNat m
-    => Proxy m
-    -> Proxy n
-    -> q m n
-    -> [String]
-
-pprintSome2
-  :: PPrint q
-  => Some2 q
-  -> [String]
-pprintSome2 (Some2 proxyM proxyN q)
-  = pprint proxyM proxyN q
-
-instance PPrint q => PPrint (Free q) where
-  pprint proxyM proxyO = \case
-    Id
-      -> [pprint1Pipes m]
-    step :>>> qs
-      -> withKnownSize step $ \_ proxyN
-      -> [pprint1Pipes m]
-      ++ pprint proxyM proxyN step
-      ++ pprint proxyN proxyO qs
-    where
-      m = intVal proxyM
-
-instance (PPrint q, PPrint r) => PPrint (Either2 q r) where
-  pprint proxyM proxyN = \case
-    L2 q
-      -> pprint proxyM proxyN q
-    R2 r
-      -> pprint proxyM proxyN r
-
-----   [ | | ]
----- > [+---+]
----- > [| f |]
----- > [+---+]
-----   [ |   ]
-instance PPrint (Atom (Const2 String)) where
-  pprint proxyM proxyN (Atom (Const2 label))
-    = let m = intVal proxyM
-          n = intVal proxyN
-          w = 1 `max` m `max` n
-   in [pprint1Dashes w]
-   ++ [pprint1Label w label]
-   ++ [pprint1Dashes w]
-
 --   [ | | ]
 -- > [  \ \]
 -- > [+-+| | ]
@@ -595,13 +348,14 @@ instance PPrint (Atom (Const2 String)) where
 -- > [+-+| | ]
 -- > [  / /  ]
 --   [ | | ]
-instance PPrint q => PPrint (Widen q) where
-  pprint _ _ (Widen proxyPre q proxyPost)
-    = let pre = intVal proxyPre
-          post = intVal proxyPost
-   in withKnownSize q $ \proxyM' proxyN'
-   -> let m' = intVal proxyM'
-          n' = intVal proxyN'
+pprintWiden
+  :: Int  -- input size
+  -> Widen [String]
+  -> Int  -- output size
+  -> [String]
+pprintWiden m (Widen pre pprintedA post) n
+    = let m' = m - pre - post
+          n' = n - pre - post
           w' = 1 `max` m' `max` n'
    in [ pprint1Pipes (pre + m')
     .+. pprint1Spaces blanks
@@ -613,7 +367,7 @@ instance PPrint q => PPrint (Widen q) where
    ++ [ pprint1Pipes pre
     .+. s
     .+. pprint1Pipes post
-      | s <- pprint proxyM' proxyN' q
+      | s <- pprintedA
       ]
    ++ [ pprint1Pipes (pre + n')
     .+. pprint1Spaces blanks
@@ -623,29 +377,117 @@ instance PPrint q => PPrint (Widen q) where
       , post > 0
       ]
 
+
+class KnownSize a => PPrint a where
+  pprint
+    :: a
+    -> [String]
+
+instance PPrint Void where
+  pprint
+    = absurd
+
+instance (PPrint a, PPrint b) => PPrint (Either a b) where
+  pprint (Left a)
+    = pprint a
+  pprint (Right b)
+    = pprint b
+
+instance PPrint a => PPrint (Widen a) where
+  pprint (Widen pre a post)
+    = let (m', n') = knownSize a
+   in pprintWiden
+        (pre + m' + post)
+        (Widen pre (pprint a) post)
+        (pre + n' + post)
+
+----   [ | | ]
+---- > [+---+]
+---- > [| f |]
+---- > [+---+]
+----   [ |   ]
+instance PPrint (Atom String) where
+  pprint (Atom m label n)
+    = let w = 1 `max` m `max` n
+   in [pprint1Dashes w]
+   ++ [pprint1Label w label]
+   ++ [pprint1Dashes w]
+
 --   [ | | ]
 -- > [  X  ]
 --   [ | | ]
 instance PPrint Swap where
-  pprint _ _ Swap
+  pprint Swap
     = ["  X  "]
 
 --   [ | ]
 -- > [ x ]
 --   [   ]
 instance PPrint Drop where
-  pprint _ _ Drop
+  pprint Drop
     = [" x "]
 
 --   [ | ]
 -- > [ |\  ]
 --   [ | | ]
 instance PPrint Dup where
-  pprint _ _ Dup
+  pprint Dup
     = [" |\\  "]
+
+
+class KnownSizeGiven a => PPrintGiven a where
+  pprintGiven
+    :: a
+    -> (Int -> [String])
+  default pprintGiven
+    :: PPrint a
+    => a
+    -> (Int -> [String])
+  pprintGiven a m
+    = let (expectedM, _) = knownSize a
+   in if m == expectedM
+      then pprint a
+      else error $ "pprintGiven: input is known to be "
+                ++ show expectedM
+                ++ ", but the given size was "
+                ++ show m
+
+instance PPrintGiven Void
+instance PPrintGiven (Atom String)
+instance PPrintGiven Swap
+instance PPrintGiven Drop
+instance PPrintGiven Dup
+
+instance PPrintGiven a => PPrintGiven [a] where
+  pprintGiven [] m
+    = [pprint1Pipes m]
+  pprintGiven (a:as) m
+    = let n = knownSizeGiven a m
+   in [pprint1Pipes m]
+   ++ pprintGiven a m
+   ++ pprintGiven as n
+
+instance (PPrintGiven a, PPrintGiven b) => PPrintGiven (Either a b) where
+  pprintGiven (Left a)
+    = pprintGiven a
+  pprintGiven (Right b)
+    = pprintGiven b
+
+instance PPrintGiven a => PPrintGiven (Widen a) where
+  pprintGiven (Widen pre a post) m
+    = let m' = m - pre - post
+          n' = knownSizeGiven a m'
+          n = pre + n' + post
+   in pprintWiden
+        m
+        (Widen pre (pprintGiven a m') post)
+        n
 
 
 test :: IO ()
 test = do
-  some2qs <- runRandom $ pickSome2StringDiagram @CartesianStep 6
-  mapM_ putStrLn $ pprintSome2 some2qs
+  (m, as) <- runRandom $ do
+    m <- pickFrom [0..5]
+    as <- pickStringDiagramGiven @CartesianStep 6 m
+    pure (m, as)
+  mapM_ putStrLn $ pprintGiven as m
