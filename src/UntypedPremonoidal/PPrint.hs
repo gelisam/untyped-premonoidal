@@ -43,6 +43,28 @@ pprint1Spaces n
   = replicate (2 * n + 1) ' '
 
 
+sideBySide
+  :: [String] -> [String] -> [String]
+sideBySide xs1 xs2
+  = [ take w1 (s1 ++ repeat ' ') ++ s2
+    | (s1, s2) <- take h (zip ys1 ys2)
+    ]
+  where
+    w1 = maximum (fmap length xs1)
+    h1 = length xs1
+    h2 = length xs2
+    h = max h1 h2
+    gap1 = (h - h1) `div` 2
+    gap2 = (h - h2) `div` 2
+    ys1 = replicate gap1 "" ++ xs1 ++ repeat ""
+    ys2 = replicate gap2 "" ++ xs2 ++ repeat ""
+
+sideEqualSide
+  :: [String] -> [String] -> [String]
+sideEqualSide xs1 xs2
+  = xs1 `sideBySide` ["  =  "] `sideBySide` xs2
+
+
 class KnownSize a => PPrint a where
   pprint
     :: a
