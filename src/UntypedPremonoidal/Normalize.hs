@@ -1,6 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, LambdaCase #-}
 module UntypedPremonoidal.Normalize where
 
+import Control.Monad (replicateM)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT, evalStateT, execStateT, get, modify, put, runStateT)
 
@@ -19,7 +20,7 @@ import UntypedPremonoidal.Widen
 --   The canonical morphisms which have been emitted so far. To make appending
 --   morphisms at the end efficient, the list is stored in reverse order.
 newtype Normalize morphism a = Normalize
-  { unNormalize :: StateT ([Int], [Int])
+  { unNormalize :: StateT ([Name], [Name])
                  ( StateT [morphism]
                    NameGen
                  ) a
@@ -29,22 +30,23 @@ newtype Normalize morphism a = Normalize
 runNormalizeGiven
   :: Normalize morphism ()
   -> (Int -> [morphism])
-runNormalizeGiven body m
-  = reverse
-  . runNameGen
-  . flip execStateT []
-  . flip evalStateT ([0..m-1], [0..m-1])
-  . unNormalize
-  $ body
+runNormalizeGiven body m = runNameGen $ do
+  wires <- replicateM m genName
+  reversedMorphisms
+    <- flip execStateT []
+    . flip evalStateT (wires, wires)
+    . unNormalize
+    $ body
+  pure $ reverse reversedMorphisms
 
 getWires
-  :: Normalize morphism ([Int], [Int])
+  :: Normalize morphism ([Name], [Name])
 getWires = Normalize $ do
   get
 
 consumeNonCanonicalMorphism
   :: morphism
-  -> ([Int] -> [Int])
+  -> ([Name] -> [Name])
   -> Normalize morphism ()
 consumeNonCanonicalMorphism _morphism effectOnWires = Normalize $ do
   (xs, ys) <- get
@@ -54,7 +56,7 @@ consumeNonCanonicalMorphism _morphism effectOnWires = Normalize $ do
 addCanonicalMorphism
   :: KnownSize morphism
   => morphism
-  -> ([Int] -> [Int])
+  -> ([Name] -> [Name])
   -> Normalize (Widen morphism) ()
 addCanonicalMorphism morphism effectOnWires = Normalize $ do
   (xs, ys) <- get
