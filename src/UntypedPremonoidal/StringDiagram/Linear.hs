@@ -14,6 +14,9 @@ data Swap = Swap
 type LinearStep
   = Swap
 
+type Linear a
+  = StringDiagram LinearStep a
+
 instance KnownSize Swap where
   knownSize Swap
     = (2, 2)

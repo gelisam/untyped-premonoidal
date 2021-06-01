@@ -11,9 +11,8 @@ import UntypedPremonoidal.StringDiagram
 type PremonoidalStep
   = Void
 
-type Premonoidal q
-  = StringDiagram PremonoidalStep q
-
+type Premonoidal a
+  = StringDiagram PremonoidalStep a
 
 
 normalizePremonoidalGiven

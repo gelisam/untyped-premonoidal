@@ -16,6 +16,9 @@ data Dup = Dup
 type CartesianStep
   = Swap `Either` Drop `Either` Dup
 
+type Cartesian a
+  = StringDiagram CartesianStep a
+
 instance KnownSize Dup where
   knownSize Dup
     = (1, 2)

@@ -15,6 +15,9 @@ data Drop = Drop
 type AffineStep
   = Swap `Either` Drop
 
+type Affine a
+  = StringDiagram AffineStep a
+
 instance KnownSize Drop where
   knownSize Drop
     = (1, 0)
