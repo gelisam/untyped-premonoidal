@@ -1,10 +1,12 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, LambdaCase #-}
 module UntypedPremonoidal.Normalize where
 
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.State.Strict (StateT, evalStateT, execStateT, get, put, modify)
+import Control.Monad.Trans.State.Strict (StateT, evalStateT, execStateT, get, modify, put, runStateT)
 
+import UntypedPremonoidal.KnownSize
 import UntypedPremonoidal.Name
+import UntypedPremonoidal.Widen
 
 
 -- ([Name], [Name]):
@@ -50,16 +52,43 @@ consumeNonCanonicalMorphism _morphism effectOnWires = Normalize $ do
   put (xs', ys)
 
 addCanonicalMorphism
-  :: morphism
+  :: KnownSize morphism
+  => morphism
   -> ([Int] -> [Int])
-  -> Normalize morphism ()
+  -> Normalize (Widen morphism) ()
 addCanonicalMorphism morphism effectOnWires = Normalize $ do
   (xs, ys) <- get
   let ys' = effectOnWires ys
   put (xs, ys')
-  lift $ modify (morphism :)
+  let m = length xs
+  let (m', _n') = knownSize morphism
+  let post = m - m'
+  lift $ modify (Widen 0 morphism post :)
 
 genWireName
   :: Normalize morphism Name
 genWireName = Normalize $ do
   lift $ lift $ genName
+
+withoutFirstWire
+  :: Normalize (Widen morphism) a
+  -> Normalize (Widen morphism) a
+withoutFirstWire body = Normalize $ do
+  get >>= \case
+    (x:xs, y:ys) -> do
+      ((a, (xs', ys')), morphisms)
+        <- lift $ lift
+         $ flip runStateT []
+         $ flip runStateT (xs, ys)
+         $ unNormalize
+         $ body
+      put (x:xs', y:ys')
+      lift $ modify (fmap addFirstWire morphisms ++)
+      pure a
+    _ -> do
+      error "withoutFirstWire: there are currently zero wires"
+  where
+    addFirstWire
+      :: Widen morphism -> Widen morphism
+    addFirstWire (Widen pre morphism post)
+      = Widen (pre + 1) morphism post
