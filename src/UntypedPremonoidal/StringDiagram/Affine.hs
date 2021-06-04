@@ -51,7 +51,7 @@ instance WidenPickings Drop where
 --   [   ]
 instance PPrint Drop where
   pprint Drop
-    = [" x "]
+    = [" o "]
 
 instance PPrintGiven Drop
 
