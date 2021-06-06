@@ -7,9 +7,9 @@ import Data.List (intercalate)
 import UntypedPremonoidal.Interpret
 import UntypedPremonoidal.KnownSize
 import UntypedPremonoidal.PPrint
-import UntypedPremonoidal.PickGiven
 import UntypedPremonoidal.Random
 import UntypedPremonoidal.Widen
+import UntypedPremonoidal.WidenPickings
 
 
 data Atom a = Atom
@@ -45,8 +45,8 @@ instance KnownSize (Atom a) where
 instance KnownSizeGiven (Atom a)
 
 
-instance PickGiven (Atom String) where
-  pickingsGiven m
+instance WidenPickings (Atom String) where
+  widenPickingsGiven m
     = [ do m' <- pickFrom [0..(m `min` 3)]
            n' <- pickFrom [0..3]
            s <- pickName

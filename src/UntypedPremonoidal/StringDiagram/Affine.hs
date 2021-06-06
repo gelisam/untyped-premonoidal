@@ -4,12 +4,12 @@ module UntypedPremonoidal.StringDiagram.Affine where
 import UntypedPremonoidal.Interpret
 import UntypedPremonoidal.KnownSize
 import UntypedPremonoidal.PPrint
-import UntypedPremonoidal.PickGiven
 import UntypedPremonoidal.Random
 import UntypedPremonoidal.StringDiagram
 import UntypedPremonoidal.StringDiagram.Linear
 import UntypedPremonoidal.Substructural
 import UntypedPremonoidal.Widen
+import UntypedPremonoidal.WidenPickings
 
 
 data Drop = Drop
@@ -40,8 +40,8 @@ instance KnownSize Drop where
 instance KnownSizeGiven Drop
 
 
-instance PickGiven Drop where
-  pickingsGiven m
+instance WidenPickings Drop where
+  widenPickingsGiven m
     = [ pickWidenGiven Drop m
       | m >= 1
       ]

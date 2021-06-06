@@ -4,13 +4,13 @@ module UntypedPremonoidal.StringDiagram.Cartesian where
 import UntypedPremonoidal.Interpret
 import UntypedPremonoidal.KnownSize
 import UntypedPremonoidal.PPrint
-import UntypedPremonoidal.PickGiven
 import UntypedPremonoidal.Random
 import UntypedPremonoidal.StringDiagram
 import UntypedPremonoidal.StringDiagram.Affine
 import UntypedPremonoidal.StringDiagram.Linear
 import UntypedPremonoidal.Substructural
 import UntypedPremonoidal.Widen
+import UntypedPremonoidal.WidenPickings
 
 
 data Dup = Dup
@@ -41,8 +41,8 @@ instance KnownSize Dup where
 instance KnownSizeGiven Dup
 
 
-instance PickGiven Dup where
-  pickingsGiven m
+instance WidenPickings Dup where
+  widenPickingsGiven m
     = [ pickWidenGiven Dup m
       | m >= 1
       ]

@@ -4,11 +4,11 @@ module UntypedPremonoidal.StringDiagram.Linear where
 import UntypedPremonoidal.Interpret
 import UntypedPremonoidal.KnownSize
 import UntypedPremonoidal.PPrint
-import UntypedPremonoidal.PickGiven
 import UntypedPremonoidal.Random
 import UntypedPremonoidal.StringDiagram
 import UntypedPremonoidal.Substructural
 import UntypedPremonoidal.Widen
+import UntypedPremonoidal.WidenPickings
 
 
 data Swap = Swap
@@ -39,8 +39,8 @@ instance KnownSize Swap where
 instance KnownSizeGiven Swap
 
 
-instance PickGiven Swap where
-  pickingsGiven m
+instance WidenPickings Swap where
+  widenPickingsGiven m
     = [ pickWidenGiven Swap m
       | m >= 2
       ]
