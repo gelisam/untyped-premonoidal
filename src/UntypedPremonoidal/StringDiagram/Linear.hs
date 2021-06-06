@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase, TypeApplications #-}
 module UntypedPremonoidal.StringDiagram.Linear where
 
+import UntypedPremonoidal.Interpret
 import UntypedPremonoidal.KnownSize
 import UntypedPremonoidal.PPrint
 import UntypedPremonoidal.PickGiven
@@ -27,6 +28,8 @@ instance Substructural Swap where
       -> error $ "restructure Swap: input should have length 2, "
               ++ "but the given list has length "
               ++ show (length xs)
+
+instance Interpret Swap
 
 
 instance KnownSize Swap where

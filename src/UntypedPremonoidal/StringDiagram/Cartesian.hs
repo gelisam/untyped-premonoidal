@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase, TypeApplications, TypeOperators #-}
 module UntypedPremonoidal.StringDiagram.Cartesian where
 
+import UntypedPremonoidal.Interpret
 import UntypedPremonoidal.KnownSize
 import UntypedPremonoidal.PPrint
 import UntypedPremonoidal.PickGiven
@@ -29,6 +30,8 @@ instance Substructural Dup where
       -> error $ "restructure Dup: input should have length 1, "
               ++ "but the given list has length "
               ++ show (length xs)
+
+instance Interpret Dup
 
 
 instance KnownSize Dup where

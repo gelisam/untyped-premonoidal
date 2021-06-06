@@ -1,8 +1,10 @@
 {-# LANGUAGE DeriveFunctor, FlexibleInstances #-}
 module UntypedPremonoidal.Atom where
 
+import Data.Dynamic (Dynamic)
 import Data.List (intercalate)
 
+import UntypedPremonoidal.Interpret
 import UntypedPremonoidal.KnownSize
 import UntypedPremonoidal.PPrint
 import UntypedPremonoidal.PickGiven
@@ -16,6 +18,24 @@ data Atom a = Atom
   , atomOutput :: Int
   }
   deriving Functor
+
+
+instance Interpret (Atom ([Dynamic] -> [Dynamic])) where
+  interpret (Atom input f output) xs
+    | length xs /= input
+      = error $ "interpret Atom: input should have length "
+             ++ show input
+             ++ "but the given list has length "
+             ++ show (length xs)
+    | length ys /= output
+      = error $ "interpret Atom: output should have length "
+             ++ show output
+             ++ "but the function returned a list of length "
+             ++ show (length ys)
+    | otherwise
+      = ys
+    where
+      ys = f xs
 
 
 instance KnownSize (Atom a) where

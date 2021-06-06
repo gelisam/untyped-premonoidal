@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveFunctor, FlexibleInstances, MultiParamTypeClasses #-}
 module UntypedPremonoidal.Widen where
 
+import UntypedPremonoidal.Interpret
 import UntypedPremonoidal.KnownSize
 import UntypedPremonoidal.PPrint
 import UntypedPremonoidal.Random
@@ -20,6 +21,12 @@ instance Substructural a => Substructural (Widen a) where
     = let (_pre, midPost) = splitAt pre preMidPost
           (mid, _post) = splitAt (length midPost - post) midPost
       in restructure a mid
+
+instance Interpret a => Interpret (Widen a) where
+  interpret (Widen pre a post) preMidPost
+    = let (_pre, midPost) = splitAt pre preMidPost
+          (mid, _post) = splitAt (length midPost - post) midPost
+      in interpret a mid
 
 
 instance KnownSize a => KnownSize (Widen a) where
