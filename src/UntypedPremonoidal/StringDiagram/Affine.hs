@@ -61,6 +61,6 @@ printRandomAffine :: IO ()
 printRandomAffine = do
   (m, as) <- runRandom $ do
     m <- pickFrom [0..5]
-    as <- pickStringDiagramGiven @AffineStep 6 m
+    as <- pickStringDiagramGiven @AffineStep @String 6 m
     pure (m, as)
   mapM_ putStrLn $ pprintGiven as m

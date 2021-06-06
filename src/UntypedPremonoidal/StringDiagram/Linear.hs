@@ -60,6 +60,6 @@ printRandomLinear :: IO ()
 printRandomLinear = do
   (m, as) <- runRandom $ do
     m <- pickFrom [0..5]
-    as <- pickStringDiagramGiven @LinearStep 6 m
+    as <- pickStringDiagramGiven @LinearStep @String 6 m
     pure (m, as)
   mapM_ putStrLn $ pprintGiven as m

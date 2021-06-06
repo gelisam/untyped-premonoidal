@@ -1,8 +1,11 @@
-{-# LANGUAGE DeriveFunctor, FlexibleInstances #-}
+{-# LANGUAGE DeriveFunctor, FlexibleInstances, TypeApplications #-}
 module UntypedPremonoidal.Atom where
 
+import Control.Monad (replicateM)
 import Data.Dynamic (Dynamic)
 import Data.List (intercalate)
+import Data.Traversable (forM)
+import qualified Data.Map as Map
 
 import UntypedPremonoidal.Interpret
 import UntypedPremonoidal.KnownSize
@@ -49,9 +52,26 @@ class PickAtom a where
   pickAtom
     :: Int -> Int -> Random a
 
+instance (PickAtom a, PickAtom b) => PickAtom (a, b) where
+  pickAtom m n
+      = (,)
+   <$> pickAtom m n
+   <*> pickAtom m n
+
 instance PickAtom String where
-  pickAtom _ _
-    = pickName
+  pickAtom _ _ = do
+    pickName
+
+instance PickAtom ([Bool] -> [Bool]) where
+  pickAtom m n = do
+    let inputs = replicateM @[] m [False,True]
+    pairs <- forM inputs $ \input -> do
+      output <- replicateM @Random n $ do
+        pickFrom [False,True]
+      pure (input, output)
+    let table = Map.fromList pairs
+    pure (table Map.!)
+
 
 instance PickAtom a => WidenPickings (Atom a) where
   widenPickingsGiven m

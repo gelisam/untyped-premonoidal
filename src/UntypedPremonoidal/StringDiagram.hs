@@ -13,9 +13,9 @@ type StringDiagram step q
 
 
 pickStringDiagramGiven
-  :: forall step
-   . (KnownSizeGiven step, WidenPickings step)
+  :: forall step a
+   . (KnownSizeGiven step, WidenPickings step, PickAtom a)
   => Int  -- desired length
-  -> (Int -> Random (StringDiagram step String))
+  -> (Int -> Random (StringDiagram step a))
 pickStringDiagramGiven desiredLength
   = pickListGiven desiredLength pickGiven

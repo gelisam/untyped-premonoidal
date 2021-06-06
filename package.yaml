@@ -12,6 +12,7 @@ category:            Control
 dependencies:
   - base >= 4.9 && < 5
   - constraints
+  - containers
   - random
   - transformers
 

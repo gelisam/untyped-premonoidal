@@ -62,6 +62,6 @@ printRandomCartesian :: IO ()
 printRandomCartesian = do
   (m, as) <- runRandom $ do
     m <- pickFrom [0..5]
-    as <- pickStringDiagramGiven @CartesianStep 6 m
+    as <- pickStringDiagramGiven @CartesianStep @String 6 m
     pure (m, as)
   mapM_ putStrLn $ pprintGiven as m
