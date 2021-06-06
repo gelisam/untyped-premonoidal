@@ -45,11 +45,19 @@ instance KnownSize (Atom a) where
 instance KnownSizeGiven (Atom a)
 
 
-instance WidenPickings (Atom String) where
+class PickAtom a where
+  pickAtom
+    :: Int -> Int -> Random a
+
+instance PickAtom String where
+  pickAtom _ _
+    = pickName
+
+instance PickAtom a => WidenPickings (Atom a) where
   widenPickingsGiven m
     = [ do m' <- pickFrom [0..(m `min` 3)]
            n' <- pickFrom [0..3]
-           s <- pickName
+           s <- pickAtom m' n'
            pickWidenGiven (Atom m' s n') m
       ]
 
