@@ -1,12 +1,13 @@
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE LambdaCase, TypeApplications #-}
 module UntypedPremonoidal.StringDiagram.Linear where
 
 import UntypedPremonoidal.KnownSize
 import UntypedPremonoidal.PPrint
 import UntypedPremonoidal.PickGiven
 import UntypedPremonoidal.Random
-import UntypedPremonoidal.Widen
 import UntypedPremonoidal.StringDiagram
+import UntypedPremonoidal.Substructural
+import UntypedPremonoidal.Widen
 
 
 data Swap = Swap
@@ -17,17 +18,30 @@ type LinearStep
 type Linear a
   = StringDiagram LinearStep a
 
+
+instance Substructural Swap where
+  restructure Swap = \case
+    [x, y]
+      -> [y, x]
+    xs
+      -> error $ "restructure Swap: input should have length 2, "
+              ++ "but the given list has length "
+              ++ show (length xs)
+
+
 instance KnownSize Swap where
   knownSize Swap
     = (2, 2)
 
 instance KnownSizeGiven Swap
 
+
 instance PickGiven Swap where
   pickingsGiven m
     = [ pickWidenGiven Swap m
       | m >= 2
       ]
+
 
 --   [ | | ]
 -- > [  X  ]
