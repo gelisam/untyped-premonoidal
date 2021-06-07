@@ -4,7 +4,6 @@ module UntypedPremonoidal.StringDiagram.Cartesian where
 import UntypedPremonoidal.Interpret
 import UntypedPremonoidal.KnownSize
 import UntypedPremonoidal.PPrint
-import UntypedPremonoidal.Random
 import UntypedPremonoidal.StringDiagram
 import UntypedPremonoidal.StringDiagram.Affine
 import UntypedPremonoidal.StringDiagram.Linear
@@ -59,9 +58,5 @@ instance PPrintGiven Dup
 
 
 printRandomCartesian :: IO ()
-printRandomCartesian = do
-  (m, as) <- runRandom $ do
-    m <- pickFrom [0..5]
-    as <- pickStringDiagramGiven @CartesianStep @String 6 m
-    pure (m, as)
-  mapM_ putStrLn $ pprintGiven as m
+printRandomCartesian
+  = printRandomStringDiagram @CartesianStep

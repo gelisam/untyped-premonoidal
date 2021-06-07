@@ -4,7 +4,6 @@ module UntypedPremonoidal.StringDiagram.Affine where
 import UntypedPremonoidal.Interpret
 import UntypedPremonoidal.KnownSize
 import UntypedPremonoidal.PPrint
-import UntypedPremonoidal.Random
 import UntypedPremonoidal.StringDiagram
 import UntypedPremonoidal.StringDiagram.Linear
 import UntypedPremonoidal.Substructural
@@ -56,11 +55,6 @@ instance PPrint Drop where
 
 instance PPrintGiven Drop
 
-
 printRandomAffine :: IO ()
-printRandomAffine = do
-  (m, as) <- runRandom $ do
-    m <- pickFrom [0..5]
-    as <- pickStringDiagramGiven @AffineStep @String 6 m
-    pure (m, as)
-  mapM_ putStrLn $ pprintGiven as m
+printRandomAffine
+  = printRandomStringDiagram @AffineStep
