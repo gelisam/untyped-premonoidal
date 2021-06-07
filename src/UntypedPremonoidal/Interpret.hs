@@ -27,8 +27,8 @@ instance Interpret a => Interpret [a] where
 
 instance Interpret Void
 
-instance (Interpret a, Interpret b) => Interpret (Either a b) where
+instance (Substructural a, Interpret b) => Interpret (Either a b) where
   interpret (Left a)
-    = interpret a
+    = restructure a
   interpret (Right b)
     = interpret b
