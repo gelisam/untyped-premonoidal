@@ -56,20 +56,54 @@ pickWidenGiven a m = do
 --     [ | | | ]
 -- >   [/ / /  ]
 --   [ | | | ]
-pprint1Slashes
+pprint1SlashesL
   :: Int -> String
-pprint1Slashes n
+pprint1SlashesL n
   = concat (replicate n "/ ")
  ++ " "
+
+--       [ | | | ]
+--       [/ / /  ]
+-- >   [ / / / ]
+--     [/ / /  ]
+--   [ | | | ]
+pprint1SlashesM
+  :: Int -> String
+pprint1SlashesM n
+  = " "
+ ++ concat (replicate n "/ ")
 
 --   [ | | | ]
 -- > [  \ \ \]
 --     [ | | | ]
-pprint1Backslashes
+pprint1BackslashesR
   :: Int -> String
-pprint1Backslashes n
+pprint1BackslashesR n
   = " "
  ++ concat (replicate n " \\")
+
+--   [ | | | ]
+--   [  \ \ \]
+-- >   [ \ \ \ ]
+--     [  \ \ \]
+--       [ | | | ]
+pprint1BackslashesM
+  :: Int -> String
+pprint1BackslashesM n
+  = " "
+ ++ concat (replicate n "\\ ")
+
+data Alternating a = Alternating
+  { alternatingValue :: a
+  , alternatingSide :: Bool
+  }
+
+instance Enum a => Enum (Alternating a) where
+  fromEnum (Alternating a b)
+    = 2 * fromEnum a + if b then 1 else 0
+  toEnum n
+    = let (i, j) = n `divMod` 2
+      in Alternating (toEnum i) (toEnum j)
 
 --   [ | | ]
 -- > [  \ \]
@@ -89,9 +123,11 @@ pprintWiden m (Widen pre pprintedA post) n
           w' = 1 `max` m' `max` n'
    in [ pprint1Pipes (pre + m')
     .+. pprint1Spaces blanks
-    .+. pprint1Backslashes post
+    .+. (if rVariant then pprint1BackslashesR else pprint1BackslashesM) post
       | let gap = w' - m'
-      , blanks <- [0..gap-1]
+      , Alternating blanks rVariant <- [ Alternating 0 True
+                                      .. Alternating (gap-1) True
+                                       ]
       , post > 0
       ]
    ++ [ pprint1Pipes pre
@@ -101,9 +137,12 @@ pprintWiden m (Widen pre pprintedA post) n
       ]
    ++ [ pprint1Pipes (pre + n')
     .+. pprint1Spaces blanks
-    .+. pprint1Slashes post
+    .+. (if mVariant then pprint1SlashesM else pprint1SlashesL) post
       | let gap = w' - n'
-      , blanks <- [gap,gap-1..1]
+      , Alternating blanks mVariant <- [ Alternating gap False
+                                       , Alternating (gap-1) True
+                                      .. Alternating 1 False
+                                       ]
       , post > 0
       ]
 
