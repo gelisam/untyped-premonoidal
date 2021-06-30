@@ -1,6 +1,8 @@
 {-# LANGUAGE DeriveFunctor, FlexibleInstances, MultiParamTypeClasses #-}
 module UntypedPremonoidal.Widen where
 
+import qualified Data.Sequence as Seq
+
 import UntypedPremonoidal.Interpret
 import UntypedPremonoidal.KnownSize
 import UntypedPremonoidal.PPrint
@@ -18,14 +20,14 @@ data Widen a = Widen
 
 instance Substructural a => Substructural (Widen a) where
   restructure (Widen pre a post) preMidPost
-    = let (_pre, midPost) = splitAt pre preMidPost
-          (mid, _post) = splitAt (length midPost - post) midPost
+    = let (_pre, midPost) = Seq.splitAt pre preMidPost
+          (mid, _post) = Seq.splitAt (length midPost - post) midPost
       in restructure a mid
 
 instance Interpret a => Interpret (Widen a) where
   interpret (Widen pre a post) preMidPost
-    = let (_pre, midPost) = splitAt pre preMidPost
-          (mid, _post) = splitAt (length midPost - post) midPost
+    = let (_pre, midPost) = Seq.splitAt pre preMidPost
+          (mid, _post) = Seq.splitAt (length midPost - post) midPost
       in interpret a mid
 
 

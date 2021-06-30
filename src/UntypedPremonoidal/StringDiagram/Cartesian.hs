@@ -1,6 +1,8 @@
 {-# LANGUAGE LambdaCase, TypeApplications, TypeOperators #-}
 module UntypedPremonoidal.StringDiagram.Cartesian where
 
+import Data.Sequence (Seq(Empty, (:<|)))
+
 import UntypedPremonoidal.Interpret
 import UntypedPremonoidal.KnownSize
 import UntypedPremonoidal.PPrint
@@ -23,8 +25,8 @@ type Cartesian a
 
 instance Substructural Dup where
   restructure Dup = \case
-    [x]
-      -> [x, x]
+    (x :<| Empty)
+      -> x :<| x :<| Empty
     xs
       -> error $ "restructure Dup: input should have length 1, "
               ++ "but the given list has length "

@@ -3,6 +3,7 @@ module UntypedPremonoidal.Interpret where
 
 import Control.Category ((>>>))
 import Data.Dynamic (Dynamic)
+import Data.Sequence (Seq)
 import Data.Void (Void)
 
 import UntypedPremonoidal.Substructural
@@ -10,11 +11,11 @@ import UntypedPremonoidal.Substructural
 
 class Interpret a where
   interpret
-    :: a -> [Dynamic] -> [Dynamic]
+    :: a -> Seq Dynamic -> Seq Dynamic
 
   default interpret
     :: Substructural a
-    => a -> [Dynamic] -> [Dynamic]
+    => a -> Seq Dynamic -> Seq Dynamic
   interpret
     = restructure
 

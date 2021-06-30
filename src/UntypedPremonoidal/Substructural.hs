@@ -2,12 +2,13 @@
 module UntypedPremonoidal.Substructural where
 
 import Control.Category ((>>>))
+import Data.Sequence (Seq)
 import Data.Void (Void, absurd)
 
 
 class Substructural a where
   restructure
-    :: a -> [e] -> [e]
+    :: a -> Seq e -> Seq e
 
 instance Substructural a => Substructural [a] where
   restructure []

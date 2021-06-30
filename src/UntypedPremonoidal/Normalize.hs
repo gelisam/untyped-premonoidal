@@ -1,9 +1,10 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, LambdaCase #-}
 module UntypedPremonoidal.Normalize where
 
-import Control.Monad (replicateM)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT, evalStateT, execStateT, get, modify, put, runStateT)
+import Data.Sequence (Seq(Empty, (:<|), (:|>)))
+import qualified Data.Sequence as Seq
 
 import UntypedPremonoidal.KnownSize
 import UntypedPremonoidal.Name
@@ -17,11 +18,10 @@ import UntypedPremonoidal.Widen
 --   morphisms which have been added to the morphism list, respectively.
 --
 -- [morphism]:
---   The canonical morphisms which have been emitted so far. To make appending
---   morphisms at the end efficient, the list is stored in reverse order.
+--   The canonical morphisms which have been emitted so far.
 newtype Normalize morphism a = Normalize
-  { unNormalize :: StateT ([Name], [Name])
-                 ( StateT [morphism]
+  { unNormalize :: StateT (Seq Name, Seq Name)
+                 ( StateT (Seq morphism)
                    NameGen
                  ) a
   }
@@ -29,24 +29,22 @@ newtype Normalize morphism a = Normalize
 
 runNormalizeGiven
   :: Normalize morphism ()
-  -> (Int -> [morphism])
+  -> (Int -> Seq morphism)
 runNormalizeGiven body m = runNameGen $ do
-  wires <- replicateM m genName
-  reversedMorphisms
-    <- flip execStateT []
+  wires <- Seq.replicateM m genName
+  flip execStateT Empty
     . flip evalStateT (wires, wires)
     . unNormalize
     $ body
-  pure $ reverse reversedMorphisms
 
 getWires
-  :: Normalize morphism ([Name], [Name])
+  :: Normalize morphism (Seq Name, Seq Name)
 getWires = Normalize $ do
   get
 
 consumeNonCanonicalMorphism
   :: morphism
-  -> ([Name] -> [Name])
+  -> (Seq Name -> Seq Name)
   -> Normalize morphism ()
 consumeNonCanonicalMorphism _morphism effectOnWires = Normalize $ do
   (xs, ys) <- get
@@ -56,7 +54,7 @@ consumeNonCanonicalMorphism _morphism effectOnWires = Normalize $ do
 addCanonicalMorphism
   :: KnownSize morphism
   => morphism
-  -> ([Name] -> [Name])
+  -> (Seq Name -> Seq Name)
   -> Normalize (Widen morphism) ()
 addCanonicalMorphism morphism effectOnWires = Normalize $ do
   (xs, ys) <- get
@@ -65,7 +63,7 @@ addCanonicalMorphism morphism effectOnWires = Normalize $ do
   let m = length xs
   let (m', _n') = knownSize morphism
   let post = m - m'
-  lift $ modify (Widen 0 morphism post :)
+  lift $ modify (:|> Widen 0 morphism post)
 
 genWireName
   :: Normalize morphism Name
@@ -77,15 +75,15 @@ withoutFirstWire
   -> Normalize (Widen morphism) a
 withoutFirstWire body = Normalize $ do
   get >>= \case
-    (x:xs, y:ys) -> do
+    (x :<| xs, y :<| ys) -> do
       ((a, (xs', ys')), morphisms)
         <- lift $ lift
-         $ flip runStateT []
+         $ flip runStateT Empty
          $ flip runStateT (xs, ys)
          $ unNormalize
          $ body
-      put (x:xs', y:ys')
-      lift $ modify (fmap addFirstWire morphisms ++)
+      put (x :<| xs', y :<| ys')
+      lift $ modify (<> fmap addFirstWire morphisms)
       pure a
     _ -> do
       error "withoutFirstWire: there are currently zero wires"

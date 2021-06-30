@@ -1,6 +1,8 @@
 {-# LANGUAGE LambdaCase, TypeApplications #-}
 module UntypedPremonoidal.StringDiagram.Linear where
 
+import Data.Sequence (Seq(Empty, (:<|)))
+
 import UntypedPremonoidal.Interpret
 import UntypedPremonoidal.KnownSize
 import UntypedPremonoidal.PPrint
@@ -21,8 +23,8 @@ type Linear a
 
 instance Substructural Swap where
   restructure Swap = \case
-    [x, y]
-      -> [y, x]
+    (x :<| y :<| Empty)
+      -> y :<| x :<| Empty
     xs
       -> error $ "restructure Swap: input should have length 2, "
               ++ "but the given list has length "

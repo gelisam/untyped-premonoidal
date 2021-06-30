@@ -4,6 +4,7 @@ module UntypedPremonoidal.Atom where
 import Control.Monad (replicateM)
 import Data.Dynamic (Dynamic)
 import Data.List (intercalate)
+import Data.Sequence (Seq)
 import Data.Traversable (forM)
 import qualified Data.Map as Map
 
@@ -23,7 +24,7 @@ data Atom a = Atom
   deriving Functor
 
 
-instance Interpret (Atom ([Dynamic] -> [Dynamic])) where
+instance Interpret (Atom (Seq Dynamic -> Seq Dynamic)) where
   interpret (Atom input f output) xs
     | length xs /= input
       = error $ "interpret Atom: input should have length "

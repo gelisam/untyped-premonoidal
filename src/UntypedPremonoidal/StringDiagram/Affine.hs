@@ -1,6 +1,8 @@
 {-# LANGUAGE LambdaCase, TypeApplications, TypeOperators #-}
 module UntypedPremonoidal.StringDiagram.Affine where
 
+import Data.Sequence (Seq(Empty, (:<|)))
+
 import UntypedPremonoidal.Interpret
 import UntypedPremonoidal.KnownSize
 import UntypedPremonoidal.PPrint
@@ -22,8 +24,8 @@ type Affine a
 
 instance Substructural Drop where
   restructure Drop = \case
-    [_]
-      -> []
+    (_ :<| Empty)
+      -> Empty
     xs
       -> error $ "restructure Drop: input should have length 1, "
               ++ "but the given list has length "
