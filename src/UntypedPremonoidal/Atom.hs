@@ -53,6 +53,13 @@ class PickAtom a where
   pickAtom
     :: Int -> Int -> Random a
 
+instance PickAtom a => PickAtom (Atom a) where
+  pickAtom m n
+      = Atom
+    <$> pure m
+    <*> pickAtom m n
+    <*> pure n
+
 instance (PickAtom a, PickAtom b) => PickAtom (a, b) where
   pickAtom m n
       = (,)

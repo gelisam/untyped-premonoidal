@@ -1,4 +1,4 @@
-{-# LANGUAGE AllowAmbiguousTypes, DeriveFunctor, FlexibleContexts, ScopedTypeVariables, TypeApplications, TypeOperators #-}
+{-# LANGUAGE AllowAmbiguousTypes, DeriveFunctor, FlexibleContexts, RankNTypes, ScopedTypeVariables, TypeApplications, TypeOperators #-}
 module UntypedPremonoidal.StringDiagram where
 
 import UntypedPremonoidal.Atom
@@ -12,13 +12,13 @@ import UntypedPremonoidal.WidenPickings
 
 
 newtype StringDiagram step a = StringDiagram
-  { unStringDiagram :: [Widen (step `Either` Atom a)]
+  { unStringDiagram :: [Widen (step `Either` a)]
   }
   deriving (Functor)
 
 
 instance ( Substructural step
-         , Interpret (Atom a)
+         , Interpret a
          )
       => Interpret (StringDiagram step a)
          where
@@ -27,7 +27,9 @@ instance ( Substructural step
     . unStringDiagram
 
 
-instance KnownSizeGiven step
+instance ( KnownSizeGiven step
+         , KnownSizeGiven a
+         )
       => KnownSizeGiven (StringDiagram step a) where
   knownSizeGiven
     = knownSizeGiven
@@ -35,7 +37,10 @@ instance KnownSizeGiven step
 
 pickStringDiagramGiven
   :: forall step a
-   . (KnownSizeGiven step, WidenPickings step, PickAtom a)
+   . ( KnownSizeGiven step, KnownSizeGiven a
+     , WidenPickings step, WidenPickings a
+     , PickAtom a
+     )
   => Int  -- desired length
   -> (Int -> Random (StringDiagram step a))
 pickStringDiagramGiven desiredLength m = do
@@ -44,7 +49,7 @@ pickStringDiagramGiven desiredLength m = do
 
 
 instance ( PPrintGiven step
-         , PPrintGiven (Atom a)
+         , PPrintGiven a
          )
       => PPrintGiven (StringDiagram step a) where
   pprintGiven
@@ -60,7 +65,7 @@ printRandomStringDiagram
 printRandomStringDiagram = do
   (m, as) <- runRandom $ do
     m <- pickFrom [0..5]
-    as <- pickStringDiagramGiven @step @String 6 m
+    as <- pickStringDiagramGiven @step @(Atom String) 6 m
     pure (m, as)
   mapM_ putStrLn $ pprintGiven as m
 
@@ -70,14 +75,15 @@ normalizeRandomStringDiagram
    . ( PPrintGiven step
      , WidenPickings step
      )
-  => ( StringDiagram step String
-    -> (Int -> StringDiagram step String)
+  => ( forall a
+     . StringDiagram step a
+    -> (Int -> StringDiagram step a)
      )
   -> IO ()
 normalizeRandomStringDiagram normalizeGiven = do
   (m, as) <- runRandom $ do
     m <- pickFrom [0..5]
-    as <- pickStringDiagramGiven @step @String 6 m
+    as <- pickStringDiagramGiven @step @(Atom String) 6 m
     pure (m, as)
   let as' = normalizeGiven as m
   mapM_ putStrLn $ sideEqualSide (pprintGiven as m)
