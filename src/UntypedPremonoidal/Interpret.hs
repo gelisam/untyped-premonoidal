@@ -33,3 +33,7 @@ instance (Substructural a, Interpret b) => Interpret (Either a b) where
     = restructure a
   interpret (Right b)
     = interpret b
+
+instance Interpret (Seq Dynamic -> Seq Dynamic) where
+  interpret f
+    = f

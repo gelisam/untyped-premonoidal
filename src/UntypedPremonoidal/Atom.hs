@@ -1,12 +1,11 @@
 {-# LANGUAGE DeriveFunctor, FlexibleInstances, TypeApplications #-}
 module UntypedPremonoidal.Atom where
 
-import Control.Monad (replicateM)
 import Data.Dynamic (Dynamic)
+import Data.Foldable (toList)
 import Data.List (intercalate)
 import Data.Sequence (Seq)
-import Data.Traversable (forM)
-import qualified Data.Map as Map
+import qualified Data.Sequence as Seq
 
 import UntypedPremonoidal.Interpret
 import UntypedPremonoidal.KnownSize
@@ -70,17 +69,6 @@ instance PickAtom String where
   pickAtom _ _ = do
     pickName
 
-instance PickAtom ([Bool] -> [Bool]) where
-  pickAtom m n = do
-    let inputs = replicateM @[] m [False,True]
-    pairs <- forM inputs $ \input -> do
-      output <- replicateM @Random n $ do
-        pickFrom [False,True]
-      pure (input, output)
-    let table = Map.fromList pairs
-    pure (table Map.!)
-
-
 instance PickAtom a => WidenPickings (Atom a) where
   widenPickingsGiven m
     = [ do m' <- pickFrom [0..(m `min` 3)]
@@ -129,3 +117,17 @@ instance PPrint (Atom String) where
    ++ [pprint1Dashes w]
 
 instance PPrintGiven (Atom String)
+
+-- Useful for checking that two expressions are equivalent on
+-- all inputs.
+toInjectiveFunction
+  :: Atom String
+  -> Seq String -> Seq String
+toInjectiveFunction (Atom _ label n) inputs
+  = Seq.fromList
+      [ label ++ show i
+     ++ "("
+     ++ intercalate ", " (toList inputs)
+     ++ ")"
+      | i <- [1..n]
+      ]
